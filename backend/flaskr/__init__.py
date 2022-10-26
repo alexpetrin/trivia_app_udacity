@@ -1,5 +1,5 @@
 import os
-from flask import Flask, request, abort, jsonify
+from flask import Flask, request, abort, jsonify, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 import random
@@ -12,6 +12,75 @@ def create_app(test_config=None):
     # create and configure the app
     app = Flask(__name__)
     setup_db(app)
+    CORS(app)
+
+    @app.after_request
+    def after_request(response):
+        response.headers.add(
+            "Access-Control-Allow-Headers", "Content-Type,Authorization,true"
+        )
+        response.headers.add(
+            "Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS"
+        )
+        return response
+
+    @app.route("/")
+    def home_redirect():
+        return redirect(url_for('get_questions'))
+
+    @app.route("/categories", methods=["GET"])
+    def get_categories():
+        categories = Category.query.all()
+        categories_dict = {}
+        for category in categories:
+            categories_dict[category.id] = category.type
+
+        if categories is None:
+            abort(404)
+        
+        return jsonify({
+            'success': True,
+            'categories': categories_dict
+        })
+
+    @app.route('/questions', methods=['GET'])
+    def get_questions():
+        questions = Question.query.all()
+        categories = Category.query.all()
+        categories_dict = {}
+        for category in categories:
+            categories_dict[category.id] = category.type
+
+        page = request.args.get('page', 1, type=int)
+        start = (page - 1) * QUESTIONS_PER_PAGE
+        end = start + QUESTIONS_PER_PAGE
+        shown_questions = questions[start:end]
+        formatted_questions = [question.format() for question in shown_questions]
+        
+        return jsonify({
+            'success': True,
+            'questions': formatted_questions,
+            'total_questions': len(questions),
+            'current_category': None,
+            'categories': categories_dict,
+        })
+
+    @app.route('/questions', methods=['DELETE'])
+    def delete_question(question_id):
+        try:
+            question = Question.query.get(question_id)
+
+            if question is None:
+                abort(404)
+
+            question.delete()            
+
+            return jsonify({
+                'success': True,
+            })
+
+        except:
+            abort(422)
 
     """
     @TODO: Set up CORS. Allow '*' for origins. Delete the sample route after completing the TODOs
